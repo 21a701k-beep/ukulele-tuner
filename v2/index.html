@@ -551,6 +551,8 @@ async function startTuner() {
     el('micError').textContent = 'This browser does not support microphone input. You can still tap a string to hear its note and tune by ear.';
     return;
   }
+  el('startBtn').disabled = true;
+  setAdvice('idle', 'Waiting for microphone permission...', '●');
   try {
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     micStream = await navigator.mediaDevices.getUserMedia({
