@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ukulele Tuner (G - C - E - A)</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #1e293b;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --green: #22c55e;
+      --amber: #f59e0b;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 1rem;
+    }
+    .tuner-card {
+      background: var(--panel);
+      padding: 2rem;
+      border-radius: 16px;
+      width: 100%;
+      max-width: 420px;
+      text-align: center;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+      border: 2px solid #334155;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .tuner-card.in-tune {
+      border-color: var(--green);
+      box-shadow: 0 0 30px rgba(34, 197, 94, 0.4);
+    }
+    h1 { font-size: 1.25rem; font-weight: 600; color: var(--muted); margin-bottom: 1.25rem; }
+
+    .status-light {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: #334155;
+      margin: 0 auto 1.25rem;
+      border: 3px solid #475569;
+      transition: all 0.15s;
+    }
+    .status-light.green {
+      background: var(--green);
+      border-color: #86efac;
+      box-shadow: 0 0 25px var(--green);
+    }
+    .status-light.amber {
+      background: var(--amber);
+      border-color: #fde047;
+      box-shadow: 0 0 15px var(--amber);
+    }
+
+    .strings-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0.75rem;
+      margin-bottom: 1.5rem;
+    }
+    .string-box {
+      background: #0f172a;
+      border: 2px solid #334155;
+      border-radius: 12px;
+      padding: 0.75rem 0.5rem;
+      cursor: pointer;
+      user-select: none;
+      transition: all 0.2s;
+    }
+    .string-box.active { border-color: var(--amber); }
+    .string-box.tuned {
+      border-color: var(--green);
+      background: rgba(34, 197, 94, 0.2);
+      box-shadow: 0 0 12px rgba(34, 197, 94, 0.3);
+    }
+    .string-note { font-size: 1.5rem; font-weight: 700; display: block; }
+    .string-freq { font-size: 0.75rem; color: var(--muted); }
+
+    .readout { margin: 1.25rem 0; }
+    .detected-note { font-size: 3.5rem; font-weight: 800; line-height: 1; }
+    .detected-freq { font-size: 0.95rem; color: var(--muted); margin-top: 0.5rem; }
+    .tuning-advice { font-size: 1.1rem; font-weight: 600; margin-top: 0.75rem; min-height: 1.5em; }
+
+    .meter-container {
+      position: relative;
+      height: 14px;
+      background: #0f172a;
+      border-radius: 7px;
+      margin: 1.5rem 0;
+      overflow: hidden;
+      border: 1px solid #334155;
+    }
+    .meter-center {
+      position: absolute;
+      left: 50%;
+      top: 0;
+      bottom: 0;
+      width: 3px;
+      background: var(--green);
+      transform: translateX(-50%);
+    }
+    .meter-pointer {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 12px;
+      border-radius: 6px;
+      background: var(--muted);
+      left: 50%;
+      transform: translateX(-50%);
+      transition: left 0.1s ease-out, background 0.15s;
+    }
+
+    .btn-row { display: flex; gap: 0.5rem; }
+    button {
+      background: #3b82f6;
+      color: white;
+      border: none;
+      padding: 0.85rem 1rem;
+      font-size: 0.95rem;
+      font-weight: 600;
+      border-radius: 10px;
+      cursor: pointer;
+      flex: 1;
+      transition: background 0.2s;
+    }
+    button:hover { background: #2563eb; }
+    button.secondary { background: #334155; flex: 0.6; }
+    button.secondary:hover { background: #475569; }
+    .hint { font-size: 0.75rem; color: var(--muted); margin-top: 0.85rem; }
+  </style>
+</head>
+<body>
+
+  <div class="tuner-card" id="card">
+    <h1>Ukulele Tuner (G - C - E - A)</h1>
+
+    <div class="status-light" id="statusLight"></div>
+
+    <div class="strings-grid">
+      <div class="string-box" id="str-G" onclick="playTone(392.00)">
+        <span class="string-note">G</span>
+        <span class="string-freq">392 Hz</span>
+      </div>
+      <div class="string-box" id="str-C" onclick="playTone(261.63)">
+        <span class="string-note">C</span>
+        <span class="string-freq">261.6 Hz</span>
+      </div>
+      <div class="string-box" id="str-E" onclick="playTone(329.63)">
+        <span class="string-note">E</span>
+        <span class="string-freq">329.6 Hz</span>
+      </div>
+      <div class="string-box" id="str-A" onclick="playTone(440.00)">
+        <span class="string-note">A</span>
+        <span class="string-freq">440 Hz</span>
+      </div>
+    </div>
+
+    <div class="meter-container">
+      <div class="meter-center"></div>
+      <div class="meter-pointer" id="pointer"></div>
+    </div>
+
+    <div class="readout">
+      <div class="detected-note" id="noteDisplay">--</div>
+      <div class="detected-freq" id="freqDisplay">0.0 Hz</div>
+      <div class="tuning-advice" id="adviceDisplay">Click Start to enable microphone</div>
+    </div>
+
+    <div class="btn-row">
+      <button id="startBtn" onclick="toggleTuner()">Start Microphone</button>
+      <button class="secondary" onclick="resetLockedStrings()">Reset Green</button>
+    </div>
+    <p class="hint">Click any G, C, E, or A box to play its reference tone.</p>
+  </div>
+
+  <script>
+    const UKULELE_STRINGS = [
+      { note: 'G', freq: 392.00 },
+      { note: 'C', freq: 261.63 },
+      { note: 'E', freq: 329.63 },
+      { note: 'A', freq: 440.00 }
+    ];
+
+    let audioCtx = null;
+    let analyser = null;
+    let micStream = null;
+    let isRunning = false;
+    let rafId = null;
+    let smoothedFreq = null;
+
+    async function toggleTuner() {
+      const btn = document.getElementById('startBtn');
+      if (isRunning) {
+        stopTuner();
+        btn.textContent = 'Start Microphone';
+        return;
+      }
+      try {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        micStream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: false, autoGainControl: false, noiseSuppression: false }
+        });
+        const source = audioCtx.createMediaStreamSource(micStream);
+        analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 2048;
+        source.connect(analyser);
+
+        isRunning = true;
+        smoothedFreq = null;
+        btn.textContent = 'Stop Microphone';
+        document.getElementById('adviceDisplay').textContent = 'Pluck a string...';
+        updatePitch();
+      } catch (err) {
+        document.getElementById('adviceDisplay').textContent = 'Microphone access blocked or unavailable.';
+      }
+    }
+
+    function stopTuner() {
+      isRunning = false;
+      if (rafId) cancelAnimationFrame(rafId);
+      if (micStream) micStream.getTracks().forEach(t => t.stop());
+      if (audioCtx && audioCtx.state !== 'closed') audioCtx.close();
+      rafId = null;
+      micStream = null;
+      analyser = null;
+      audioCtx = null;
+      smoothedFreq = null;
+    }
+
+    function resetLockedStrings() {
+      UKULELE_STRINGS.forEach(s => {
+        document.getElementById(`str-${s.note}`).classList.remove('tuned', 'active');
+      });
+      document.getElementById('statusLight').className = 'status-light';
+      document.getElementById('card').classList.remove('in-tune');
+      document.getElementById('noteDisplay').textContent = '--';
+      document.getElementById('freqDisplay').textContent = '0.0 Hz';
+      document.getElementById('adviceDisplay').textContent = isRunning ? 'Pluck a string...' : 'Click Start to enable microphone';
+      document.getElementById('adviceDisplay').style.color = 'var(--text)';
+      document.getElementById('pointer').style.left = '50%';
+      document.getElementById('pointer').style.background = 'var(--muted)';
+      smoothedFreq = null;
+    }
+
+    function updatePitch() {
+      if (!isRunning || !analyser || !audioCtx) return;
+      const buffer = new Float32Array(analyser.fftSize);
+      analyser.getFloatTimeDomainData(buffer);
+
+      const rawFreq = autoCorrelate(buffer, audioCtx.sampleRate);
+      if (rawFreq !== -1 && rawFreq >= 190 && rawFreq <= 600) {
+        smoothedFreq = smoothedFreq ? (smoothedFreq * 0.7 + rawFreq * 0.3) : rawFreq;
+        renderTunerState(smoothedFreq);
+      }
+      rafId = requestAnimationFrame(updatePitch);
+    }
+
+    function renderTunerState(freq) {
+      let closest = UKULELE_STRINGS[0];
+      let minCents = Infinity;
+      for (const s of UKULELE_STRINGS) {
+        const centsDifference = Math.abs(1200 * Math.log2(freq / s.freq));
+        if (centsDifference < minCents) {
+          minCents = centsDifference;
+          closest = s;
+        }
+      }
+
+      const cents = 1200 * Math.log2(freq / closest.freq);
+      const isTuned = Math.abs(cents) <= 5;
+
+      document.getElementById('noteDisplay').textContent = closest.note;
+      document.getElementById('freqDisplay').textContent = `${freq.toFixed(1)} Hz (Target: ${closest.freq} Hz)`;
+
+      const light = document.getElementById('statusLight');
+      const card = document.getElementById('card');
+      const pointer = document.getElementById('pointer');
+      const advice = document.getElementById('adviceDisplay');
+
+      UKULELE_STRINGS.forEach(s => {
+        document.getElementById(`str-${s.note}`).classList.remove('active');
+      });
+
+      const activeBox = document.getElementById(`str-${closest.note}`);
+      const clampedCents = Math.max(-50, Math.min(50, cents));
+      pointer.style.left = `${50 + clampedCents}%`;
+
+      if (isTuned) {
+        light.className = 'status-light green';
+        card.classList.add('in-tune');
+        activeBox.classList.add('tuned');
+        pointer.style.background = 'var(--green)';
+        advice.textContent = `${closest.note} String Tuned! (Green Light)`;
+        advice.style.color = 'var(--green)';
+      } else {
+        light.className = 'status-light amber';
+        card.classList.remove('in-tune');
+        activeBox.classList.add('active');
+        pointer.style.background = 'var(--amber)';
+        advice.style.color = 'var(--amber)';
+        advice.textContent = cents < 0 ? 'Tune Up (Tighten)' : 'Tune Down (Loosen)';
+      }
+    }
+
+    function autoCorrelate(buf, sampleRate) {
+      let size = buf.length;
+      let rms = 0;
+      for (let i = 0; i < size; i++) rms += buf[i] * buf[i];
+      rms = Math.sqrt(rms / size);
+      if (rms < 0.015) return -1;
+
+      let r1 = 0, r2 = size - 1, thres = 0.2;
+      for (let i = 0; i < size / 2; i++) {
+        if (Math.abs(buf[i]) < thres) { r1 = i; break; }
+      }
+      for (let i = 1; i < size / 2; i++) {
+        if (Math.abs(buf[size - i]) < thres) { r2 = size - i; break; }
+      }
+      buf = buf.slice(r1, r2);
+      size = buf.length;
+      if (size < 2) return -1;
+
+      const c = new Array(size).fill(0);
+      for (let i = 0; i < size; i++) {
+        for (let j = 0; j < size - i; j++) {
+          c[i] += buf[j] * buf[j + i];
+        }
+      }
+
+      let d = 0;
+      while (d + 1 < size && c[d] > c[d + 1]) d++;
+      let maxval = -1, maxpos = -1;
+      for (let i = d; i < size; i++) {
+        if (c[i] > maxval) { maxval = c[i]; maxpos = i; }
+      }
+      if (maxpos <= 0) return -1;
+
+      let period = maxpos;
+      if (maxpos > 0 && maxpos < size - 1) {
+        const x1 = c[maxpos - 1];
+        const x2 = c[maxpos];
+        const x3 = c[maxpos + 1];
+        const denominator = 2 * (2 * x2 - x1 - x3);
+        if (denominator !== 0) period += (x3 - x1) / denominator;
+      }
+      return sampleRate / period;
+    }
+
+    function playTone(freq) {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.25, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.5);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 1.5);
+      osc.addEventListener('ended', () => ctx.close());
+    }
+  </script>
+</body>
+</html>
