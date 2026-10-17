@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ukulele Tuner V2 - G C E A, Low-G and Baritone</title>
+<style>
+  :root {
+    --bg: #f6ead8;
+    --bg2: #efdfc6;
+    --card: #fffaf1;
+    --wood: #7a4a21;
+    --wood-dark: #5d3a1a;
+    --wood-deep: #4a2c12;
+    --text: #3b2a17;
+    --muted: #7d6a52;
+    --green: #2e7d32;
+    --green-soft: #e3f0e3;
+    --amber: #b26a00;
+    --amber-soft: #fdeed3;
+    --red: #a94438;
+    --focus: #1a5fb4;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: linear-gradient(160deg, var(--bg) 0%, var(--bg2) 100%);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 1rem 0.75rem 2.5rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  header { text-align: center; margin: 0.5rem 0 1rem; max-width: 40rem; }
+  h1 { font-size: 1.35rem; font-weight: 700; color: var(--wood-dark); }
+  header p { font-size: 0.85rem; color: var(--muted); margin-top: 0.25rem; }
+
+  .tuning-picker { display: flex; gap: 0.4rem; justify-content: center; margin: 0.75rem 0 1.1rem; flex-wrap: wrap; }
+  .tuning-picker button {
+    min-height: 44px; padding: 0.55rem 0.9rem; border-radius: 999px;
+    border: 2px solid var(--wood); background: var(--card); color: var(--wood-dark);
+    font-size: 0.85rem; font-weight: 600; cursor: pointer;
+  }
+  .tuning-picker button[aria-pressed="true"] { background: var(--wood); color: #fff8ec; }
+  .tuning-picker button:focus-visible, button:focus-visible, .hit-btn:focus-visible {
+    outline: 3px solid var(--focus); outline-offset: 2px;
+  }
+
+  .layout { display: flex; flex-direction: column; align-items: center; gap: 1.1rem; width: 100%; max-width: 880px; }
+
+  .tuner-card {
+    background: var(--card); border: 2px solid #e3cfa9; border-radius: 18px;
+    padding: 1.1rem 1.1rem 1.25rem; width: 100%; max-width: 430px;
+    box-shadow: 0 10px 24px rgba(93, 58, 26, 0.15);
+    text-align: center; transition: border-color 0.25s, box-shadow 0.25s;
+  }
+  .tuner-card.in-tune { border-color: var(--green); box-shadow: 0 0 0 4px var(--green-soft), 0 10px 24px rgba(46, 125, 50, 0.18); }
+
+  .status-row { display: flex; align-items: center; justify-content: center; gap: 0.55rem; margin-bottom: 0.6rem; }
+  .status-light {
+    width: 26px; height: 26px; border-radius: 50%;
+    background: #d9c39a; border: 3px solid #c4a97a; transition: background 0.2s, border-color 0.2s;
+    flex: none;
+  }
+  .status-light.green { background: var(--green); border-color: #79b47d; }
+  .status-light.amber { background: #f0a12e; border-color: #f7cd85; }
+  .status-label { font-size: 0.85rem; font-weight: 600; color: var(--muted); }
+
+  .chips { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.45rem; margin-bottom: 0.85rem; }
+  .chip {
+    border: 2px solid #e3cfa9; border-radius: 12px; padding: 0.45rem 0.15rem;
+    background: #fdf6e8; font-size: 0.78rem; color: var(--muted);
+  }
+  .chip .chip-note { display: block; font-size: 1.05rem; font-weight: 800; color: var(--text); }
+  .chip .chip-check { display: inline-block; margin-left: 0.15rem; color: var(--green); font-weight: 800; visibility: hidden; }
+  .chip.active { border-color: var(--amber); background: var(--amber-soft); }
+  .chip.tuned { border-color: var(--green); background: var(--green-soft); }
+  .chip.tuned .chip-check { visibility: visible; }
+
+  .meter-wrap { margin: 0.35rem 0 0.2rem; }
+  .meter {
+    position: relative; height: 18px; background: #efe1c6; border-radius: 9px;
+    border: 1px solid #ddc79b; overflow: hidden;
+  }
+  .meter-tick { position: absolute; top: 0; bottom: 0; width: 2px; background: #d3ba8d; }
+  .meter-center { position: absolute; left: 50%; top: -2px; bottom: -2px; width: 4px; background: var(--green); transform: translateX(-50%); }
+  .meter-pointer {
+    position: absolute; top: 1px; bottom: 1px; width: 14px; border-radius: 7px;
+    background: var(--muted); left: 50%; transform: translateX(-50%);
+    transition: left 0.12s ease-out, background 0.2s;
+  }
+  .meter-scale { display: flex; justify-content: space-between; font-size: 0.68rem; color: var(--muted); margin-top: 0.2rem; padding: 0 0.1rem; }
+
+  .readout { margin: 0.7rem 0 0.4rem; }
+  .detected-note { font-size: 3.2rem; font-weight: 800; line-height: 1.05; color: var(--wood-dark); }
+  .target-line { font-size: 0.95rem; font-weight: 700; margin-top: 0.3rem; }
+  .freq-line { font-size: 0.85rem; color: var(--muted); margin-top: 0.2rem; }
+  .cents-line { font-size: 0.85rem; color: var(--muted); }
+  .advice { font-size: 1.05rem; font-weight: 700; margin-top: 0.55rem; min-height: 1.6em; }
+  .advice .ico { margin-right: 0.3rem; }
+  .advice.flat { color: var(--amber); }
+  .advice.sharp { color: var(--red); }
+  .advice.good { color: var(--green); }
+  .advice.idle { color: var(--muted); font-weight: 600; }
+
+  .btn-row { display: flex; gap: 0.5rem; margin-top: 0.8rem; }
+  .btn-row button {
+    flex: 1; min-height: 48px; border: none; border-radius: 12px; cursor: pointer;
+    font-size: 0.95rem; font-weight: 700; padding: 0.7rem 0.6rem;
+    background: var(--wood); color: #fff8ec; transition: background 0.2s;
+  }
+  .btn-row button:hover { background: var(--wood-dark); }
+  .btn-row button:disabled { background: #c9b28c; color: #6f5b3f; cursor: not-allowed; }
+  .btn-row button.secondary { background: #e8d8ba; color: var(--wood-dark); flex: 0.7; }
+  .btn-row button.secondary:hover { background: #dcc79d; }
+  .privacy { font-size: 0.72rem; color: var(--muted); margin-top: 0.7rem; }
+  .mic-error { font-size: 0.85rem; color: var(--red); font-weight: 600; margin-top: 0.5rem; min-height: 1.2em; }
+
+  .uke-section { width: 100%; display: flex; flex-direction: column; align-items: center; }
+  .uke-caption { font-size: 0.8rem; color: var(--muted); margin: 0.15rem 0 0.5rem; text-align: center; }
+  .uke-wrap { position: relative; width: min(280px, 74vw, 34vh); }
+  .uke-wrap svg { display: block; width: 100%; height: auto; }
+
+  .hit-btn {
+    position: absolute; background: transparent; border: none; cursor: pointer;
+    border-radius: 10px; padding: 0;
+  }
+  .hit-btn:hover { background: rgba(178, 106, 0, 0.10); }
+  .hit-btn:active { background: rgba(178, 106, 0, 0.18); }
+  .peg-btn { min-width: 44px; min-height: 44px; display: flex; align-items: center; justify-content: center; }
+  .peg-btn .dir { font-size: 1.15rem; font-weight: 800; color: var(--amber); text-shadow: 0 0 4px #fff8ec; }
+  .peg-btn .dir.sharp { color: var(--red); }
+
+  .line-0, .line-1, .line-2, .line-3 { transition: stroke 0.2s, stroke-width 0.2s; }
+  .uke-wrap.act-0 .line-0, .uke-wrap.act-1 .line-1, .uke-wrap.act-2 .line-2, .uke-wrap.act-3 .line-3 {
+    stroke: #f0a12e; stroke-width: 5;
+  }
+  .uke-wrap.tun-0 .line-0, .uke-wrap.tun-1 .line-1, .uke-wrap.tun-2 .line-2, .uke-wrap.tun-3 .line-3 {
+    stroke: var(--green); stroke-width: 4.5;
+  }
+  .chk { opacity: 0; transition: opacity 0.25s; }
+  .uke-wrap.tun-0 .chk-0, .uke-wrap.tun-1 .chk-1, .uke-wrap.tun-2 .chk-2, .uke-wrap.tun-3 .chk-3 { opacity: 1; }
+  .pegc { transition: filter 0.2s, fill 0.2s; }
+  .uke-wrap.glow-0 .pegc-0, .uke-wrap.glow-1 .pegc-1, .uke-wrap.glow-2 .pegc-2, .uke-wrap.glow-3 .pegc-3 {
+    fill: #f0a12e; filter: drop-shadow(0 0 8px rgba(240, 161, 46, 0.9));
+  }
+  .uke-wrap.glow-0.tun-0 .pegc-0, .uke-wrap.glow-1.tun-1 .pegc-1,
+  .uke-wrap.glow-2.tun-2 .pegc-2, .uke-wrap.glow-3.tun-3 .pegc-3 { fill: var(--green); filter: drop-shadow(0 0 8px rgba(46,125,50,0.8)); }
+
+  .strwrap { transform-box: fill-box; transform-origin: 50% 0%; }
+  .strwrap.playing { animation: vib 0.5s ease-out; }
+  @keyframes vib {
+    0% { transform: rotate(0deg); }
+    20% { transform: rotate(1.6deg); }
+    45% { transform: rotate(-1.2deg); }
+    70% { transform: rotate(0.7deg); }
+    100% { transform: rotate(0deg); }
+  }
+  .uke-wrap.pluck { animation: tilt 0.45s ease; }
+  @keyframes tilt {
+    0% { transform: rotate(0deg) translateY(0); }
+    30% { transform: rotate(-2.4deg) translateY(-4px); }
+    65% { transform: rotate(1.4deg) translateY(1px); }
+    100% { transform: rotate(0deg) translateY(0); }
+  }
+  .uke-wrap.celebrate { animation: celebrate 0.9s ease; }
+  @keyframes celebrate {
+    0% { transform: rotate(0deg) translateY(0); }
+    25% { transform: rotate(-2.5deg) translateY(-6px); }
+    50% { transform: rotate(2.5deg) translateY(-8px); }
+    75% { transform: rotate(-1.2deg) translateY(-3px); }
+    100% { transform: rotate(0deg) translateY(0); }
+  }
+  .uke-wrap.celebrate .strwrap { animation: shimmer 0.9s ease; }
+  @keyframes shimmer {
+    0%, 100% { opacity: 1; }
+    25% { opacity: 0.35; }
+    50% { opacity: 1; }
+    75% { opacity: 0.5; }
+  }
+
+  @media (min-width: 820px) {
+    .layout { flex-direction: row; align-items: flex-start; justify-content: center; gap: 2rem; }
+    .tuner-card { order: 0; }
+    .uke-section { order: 1; flex: 0 0 auto; padding-top: 0.4rem; }
+  }
+
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+    .strwrap.playing { animation: none; }
+    .uke-wrap.pluck, .uke-wrap.celebrate, .uke-wrap.celebrate .strwrap { animation: none; }
+    .uke-wrap.pluck svg, .uke-wrap.celebrate svg { filter: drop-shadow(0 0 10px rgba(240, 161, 46, 0.65)); }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Ukulele Tuner</h1>
+  <p>Pluck one string at a time and follow the meter. Tap a string or peg on the ukulele to hear its note.</p>
+  <div class="tuning-picker" role="group" aria-label="Choose a tuning">
+    <button type="button" id="tun-standard" aria-pressed="true">Standard (High G)</button>
+    <button type="button" id="tun-lowg" aria-pressed="false">Low G</button>
+    <button type="button" id="tun-baritone" aria-pressed="false">Baritone</button>
+  </div>
+</header>
+
+<div class="layout">
+
+  <section class="tuner-card" id="card" aria-label="Tuning meter">
+    <div class="status-row">
+      <div class="status-light" id="statusLight" aria-hidden="true"></div>
+      <div class="status-label" id="statusLabel">Not listening</div>
+    </div>
+
+    <div class="chips" id="chips"></div>
+
+    <div class="meter-wrap">
+      <div class="meter" aria-hidden="true">
+        <div class="meter-tick" style="left:25%"></div>
+        <div class="meter-center"></div>
+        <div class="meter-tick" style="left:75%"></div>
+        <div class="meter-pointer" id="pointer"></div>
+      </div>
+      <div class="meter-scale"><span>flat -50</span><span>0 cents</span><span>+50 sharp</span></div>
+    </div>
+
+    <div class="readout">
+      <div class="detected-note" id="noteDisplay">--</div>
+      <div class="target-line" id="targetDisplay">Target: --</div>
+      <div class="freq-line" id="freqDisplay">0.0 Hz</div>
+      <div class="cents-line" id="centsDisplay">0 cents from target</div>
+      <div class="advice idle" id="adviceDisplay"><span class="ico" aria-hidden="true"></span><span id="adviceText">Press Start tuning to use the microphone</span></div>
+    </div>
+
+    <div class="btn-row">
+      <button type="button" id="startBtn">Start tuning</button>
+      <button type="button" id="stopBtn" class="secondary" disabled>Stop listening</button>
+      <button type="button" id="resetBtn" class="secondary" aria-label="Reset tuned check marks">Reset</button>
+    </div>
+    <div class="mic-error" id="micError" role="alert"></div>
+    <p class="privacy">Your audio is processed on this device only. It is not recorded or uploaded anywhere.</p>
+  </section>
+
+  <section class="uke-section" aria-label="Interactive ukulele">
+    <div class="uke-wrap" id="ukeWrap">
+      <svg viewBox="0 0 240 560" aria-hidden="true">
+        <defs>
+          <linearGradient id="bodyGrad" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#a5672d"/>
+            <stop offset="0.55" stop-color="#8a5325"/>
+            <stop offset="1" stop-color="#6e401c"/>
+          </linearGradient>
+          <linearGradient id="headGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#6e401c"/>
+            <stop offset="1" stop-color="#4a2c12"/>
+          </linearGradient>
+        </defs>
+
+        <!-- body -->
+        <path d="M120 258 C75 258 52 292 52 330 C52 356 66 372 78 384 C56 398 40 424 40 452 C40 500 76 536 120 536 C164 536 200 500 200 452 C200 424 184 398 162 384 C174 372 188 356 188 330 C188 292 165 258 120 258 Z"
+          fill="url(#bodyGrad)" stroke="#5d3a1a" stroke-width="3"/>
+        <circle cx="120" cy="400" r="27" fill="none" stroke="#c99a5b" stroke-width="4"/>
+        <circle cx="120" cy="400" r="20" fill="#2e1a09"/>
+        <rect x="84" y="450" width="72" height="16" rx="5" fill="#3a2310"/>
+
+        <!-- fretboard -->
+        <rect x="74" y="100" width="92" height="262" fill="#4a2c12" rx="4"/>
+        <g stroke="#d9c39a" stroke-width="2">
+          <line x1="76" y1="128" x2="164" y2="128"/>
+          <line x1="76" y1="156" x2="164" y2="156"/>
+          <line x1="76" y1="182" x2="164" y2="182"/>
+          <line x1="76" y1="206" x2="164" y2="206"/>
+          <line x1="76" y1="229" x2="164" y2="229"/>
+          <line x1="76" y1="251" x2="164" y2="251"/>
+          <line x1="76" y1="272" x2="164" y2="272"/>
+          <line x1="76" y1="292" x2="164" y2="292"/>
+          <line x1="76" y1="311" x2="164" y2="311"/>
+          <line x1="76" y1="329" x2="164" y2="329"/>
+          <line x1="76" y1="346" x2="164" y2="346"/>
+        </g>
+        <circle cx="120" cy="206" r="4" fill="#d9c39a"/>
+        <circle cx="120" cy="272" r="4" fill="#d9c39a"/>
+
+        <!-- headstock -->
+        <rect x="66" y="14" width="108" height="86" rx="14" fill="url(#headGrad)" stroke="#5d3a1a" stroke-width="3"/>
+        <rect x="72" y="98" width="96" height="7" fill="#e8dcc0"/>
+
+        <!-- tuning pegs -->
+        <g class="pegc pegc-0"><rect x="52" y="38" width="18" height="8" fill="#3a2310"/><circle cx="52" cy="42" r="12" fill="#c9b28c" stroke="#3a2310" stroke-width="2.5"/></g>
+        <g class="pegc pegc-1"><rect x="52" y="74" width="18" height="8" fill="#3a2310"/><circle cx="52" cy="78" r="12" fill="#c9b28c" stroke="#3a2310" stroke-width="2.5"/></g>
+        <g class="pegc pegc-2"><rect x="170" y="38" width="18" height="8" fill="#3a2310"/><circle cx="188" cy="42" r="12" fill="#c9b28c" stroke="#3a2310" stroke-width="2.5"/></g>
+        <g class="pegc pegc-3"><rect x="170" y="74" width="18" height="8" fill="#3a2310"/><circle cx="188" cy="78" r="12" fill="#c9b28c" stroke="#3a2310" stroke-width="2.5"/></g>
+
+        <!-- peg labels -->
+        <text id="plbl-0" x="30" y="47" text-anchor="middle" font-size="13" font-weight="700" fill="#5d3a1a">G4</text>
+        <text id="plbl-1" x="30" y="83" text-anchor="middle" font-size="13" font-weight="700" fill="#5d3a1a">C4</text>
+        <text id="plbl-2" x="210" y="47" text-anchor="middle" font-size="13" font-weight="700" fill="#5d3a1a">E4</text>
+        <text id="plbl-3" x="210" y="83" text-anchor="middle" font-size="13" font-weight="700" fill="#5d3a1a">A4</text>
+
+        <!-- strings -->
+        <g class="strwrap str-0"><line class="line-0" x1="80" y1="104" x2="80" y2="456" stroke="#efe6d2" stroke-width="3"/></g>
+        <g class="strwrap str-1"><line class="line-1" x1="107" y1="104" x2="107" y2="456" stroke="#efe6d2" stroke-width="2.6"/></g>
+        <g class="strwrap str-2"><line class="line-2" x1="133" y1="104" x2="133" y2="456" stroke="#efe6d2" stroke-width="2.2"/></g>
+        <g class="strwrap str-3"><line class="line-3" x1="160" y1="104" x2="160" y2="456" stroke="#efe6d2" stroke-width="1.8"/></g>
+
+        <!-- check marks -->
+        <g class="chk chk-0" transform="translate(80,548)"><circle r="9" fill="#2e7d32"/><path d="M-4,0 L-1,3.5 L4.5,-3.5" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round"/></g>
+        <g class="chk chk-1" transform="translate(107,548)"><circle r="9" fill="#2e7d32"/><path d="M-4,0 L-1,3.5 L4.5,-3.5" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round"/></g>
+        <g class="chk chk-2" transform="translate(133,548)"><circle r="9" fill="#2e7d32"/><path d="M-4,0 L-1,3.5 L4.5,-3.5" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round"/></g>
+        <g class="chk chk-3" transform="translate(160,548)"><circle r="9" fill="#2e7d32"/><path d="M-4,0 L-1,3.5 L4.5,-3.5" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round"/></g>
+      </svg>
+
+      <!-- hit areas -->
+      <button type="button" class="hit-btn str-btn" data-str="0" style="left:27.9%;top:17.9%;width:10.9%;height:64.3%" aria-label="String 1, G string. Hear its reference tone."></button>
+      <button type="button" class="hit-btn str-btn" data-str="1" style="left:39.2%;top:17.9%;width:10.9%;height:64.3%" aria-label="String 2, C string. Hear its reference tone."></button>
+      <button type="button" class="hit-btn str-btn" data-str="2" style="left:50%;top:17.9%;width:10.9%;height:64.3%" aria-label="String 3, E string. Hear its reference tone."></button>
+      <button type="button" class="hit-btn str-btn" data-str="3" style="left:61.3%;top:17.9%;width:10.9%;height:64.3%" aria-label="String 4, A string. Hear its reference tone."></button>
+      <button type="button" class="hit-btn peg-btn" data-str="0" style="left:9.2%;top:2.1%;width:25%;height:10.7%" aria-label="Tuning peg for string 1"><span class="dir" aria-hidden="true"></span></button>
+      <button type="button" class="hit-btn peg-btn" data-str="1" style="left:9.2%;top:8.6%;width:25%;height:10.7%" aria-label="Tuning peg for string 2"><span class="dir" aria-hidden="true"></span></button>
+      <button type="button" class="hit-btn peg-btn" data-str="2" style="left:65.8%;top:2.1%;width:25%;height:10.7%" aria-label="Tuning peg for string 3"><span class="dir" aria-hidden="true"></span></button>
+      <button type="button" class="hit-btn peg-btn" data-str="3" style="left:65.8%;top:8.6%;width:25%;height:10.7%" aria-label="Tuning peg for string 4"><span class="dir" aria-hidden="true"></span></button>
+    </div>
+    <p class="uke-caption">Tap a string or peg to hear its note. A ring of arrows shows which way to turn the peg.</p>
+  </section>
+</div>
+
+<div class="sr-only" id="live" aria-live="polite"></div>
+
+<script>
+'use strict';
+
+/* ---------- Tuning data ---------- */
+const TUNINGS = {
+  standard: {
+    label: 'Standard (High G)',
+    strings: [
+      { note: 'G4', name: 'G', freq: 392.00 },
+      { note: 'C4', name: 'C', freq: 261.63 },
+      { note: 'E4', name: 'E', freq: 329.63 },
+      { note: 'A4', name: 'A', freq: 440.00 }
+    ]
+  },
+  lowg: {
+    label: 'Low G',
+    strings: [
+      { note: 'G3', name: 'G', freq: 196.00 },
+      { note: 'C4', name: 'C', freq: 261.63 },
+      { note: 'E4', name: 'E', freq: 329.63 },
+      { note: 'A4', name: 'A', freq: 440.00 }
+    ]
+  },
+  baritone: {
+    label: 'Baritone',
+    strings: [
+      { note: 'D3', name: 'D', freq: 146.83 },
+      { note: 'G3', name: 'G', freq: 196.00 },
+      { note: 'B3', name: 'B', freq: 246.94 },
+      { note: 'E4', name: 'E', freq: 329.63 }
+    ]
+  }
+};
+const TUNING_KEYS = ['standard', 'lowg', 'baritone'];
+
+const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+const IN_TUNE_CENTS = 5;
+const MIN_FREQ = 130;   /* widened from 190 so Baritone D3 (146.83 Hz) is detected */
+const MAX_FREQ = 600;
+
+/* ---------- State ---------- */
+let currentTuning = 'standard';
+let selected = null;            /* index of manually selected string, or null (auto) */
+let tunedSet = new Set();
+let audioCtx = null;
+let analyser = null;
+let micStream = null;
+let isRunning = false;
+let rafId = null;
+let smoothedFreq = null;
+let tonePlaying = false;
+let lastValidAt = 0;
+let weakFrames = 0;
+let lastAnnounced = '';
+let lastAnnounceAt = 0;
+let advanceTimer = null;
+
+/* ---------- Element refs ---------- */
+const el = id => document.getElementById(id);
+const ukeWrap = el('ukeWrap');
+const card = el('card');
+const chipsEl = el('chips');
+
+/* ---------- Helpers ---------- */
+function strings() { return TUNINGS[currentTuning].strings; }
+
+function freqToNoteName(freq) {
+  const n = Math.round(12 * Math.log2(freq / 440)) + 69;
+  return NOTE_NAMES[((n % 12) + 12) % 12] + (Math.floor(n / 12) - 1);
+}
+
+function announce(text, force) {
+  const now = Date.now();
+  if (!force && (text === lastAnnounced || now - lastAnnounceAt < 1500)) return;
+  lastAnnounced = text;
+  lastAnnounceAt = now;
+  el('live').textContent = text;
+}
+
+function setAdvice(kind, text, ico) {
+  const a = el('adviceDisplay');
+  a.className = 'advice ' + kind;
+  a.querySelector('.ico').textContent = ico || '';
+  el('adviceText').textContent = text;
+}
+
+function refreshUkeClasses(activeIdx) {
+  const cls = [];
+  if (activeIdx !== null && activeIdx !== undefined) {
+    cls.push('act-' + activeIdx, 'glow-' + activeIdx);
+  }
+  tunedSet.forEach(i => cls.push('tun-' + i));
+  ukeWrap.className = 'uke-wrap ' + cls.join(' ');
+}
+
+function refreshChips(activeIdx) {
+  const s = strings();
+  chipsEl.innerHTML = '';
+  s.forEach((st, i) => {
+    const d = document.createElement('div');
+    d.className = 'chip' + (tunedSet.has(i) ? ' tuned' : '') + (i === activeIdx ? ' active' : '');
+    d.innerHTML = '<span class="chip-note">' + st.name + '<span class="chip-check" aria-hidden="true">✓</span></span>' +
+      '<span>' + st.freq.toFixed(st.freq < 200 ? 1 : 0) + ' Hz</span>';
+    chipsEl.appendChild(d);
+  });
+  document.querySelectorAll('.peg-btn .dir').forEach(sp => { sp.textContent = ''; sp.className = 'dir'; });
+}
+
+function setPegDirection(idx, dir) {
+  const btn = document.querySelector('.peg-btn[data-str="' + idx + '"] .dir');
+  if (!btn) return;
+  if (dir === 'flat') { btn.textContent = '↻'; btn.className = 'dir'; }
+  else if (dir === 'sharp') { btn.textContent = '↺'; btn.className = 'dir sharp'; }
+  else { btn.textContent = ''; btn.className = 'dir'; }
+}
+
+/* ---------- Tuning switching ---------- */
+function applyTuning(key) {
+  currentTuning = key;
+  selected = null;
+  tunedSet = new Set();
+  clearTimeout(advanceTimer);
+  TUNING_KEYS.forEach(k => el('tun-' + k).setAttribute('aria-pressed', String(k === key)));
+  strings().forEach((st, i) => { el('plbl-' + i).textContent = st.note; });
+  document.querySelectorAll('.str-btn').forEach((b, i) => {
+    const st = strings()[i];
+    b.setAttribute('aria-label', 'String ' + (i + 1) + ', ' + st.note + '. Hear its reference tone.');
+  });
+  document.querySelectorAll('.peg-btn').forEach((b, i) => {
+    const st = strings()[i];
+    b.setAttribute('aria-label', 'Tuning peg for the ' + st.note + ' string');
+  });
+  card.classList.remove('in-tune');
+  el('statusLight').className = 'status-light';
+  el('statusLabel').textContent = isRunning ? 'Listening' : 'Not listening';
+  el('noteDisplay').textContent = '--';
+  el('targetDisplay').textContent = 'Target: --';
+  el('freqDisplay').textContent = '0.0 Hz';
+  el('centsDisplay').textContent = '0 cents from target';
+  el('pointer').style.left = '50%';
+  el('pointer').style.background = 'var(--muted)';
+  setAdvice('idle', isRunning ? 'Pluck one string' : 'Press Start tuning to use the microphone', '');
+  refreshUkeClasses(null);
+  refreshChips(null);
+  smoothedFreq = null;
+  announce(TUNINGS[key].label + ' tuning selected');
+}
+
+TUNING_KEYS.forEach(k => el('tun-' + k).addEventListener('click', () => applyTuning(k)));
+
+/* ---------- Reference tones ---------- */
+function playTone(freq) {
+  tonePlaying = true;
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  const ctx = new Ctx();
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = 'triangle';
+  osc.frequency.value = freq;
+  gain.gain.setValueAtTime(0.25, ctx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.5);
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.start();
+  osc.stop(ctx.currentTime + 1.5);
+  osc.addEventListener('ended', () => { ctx.close(); tonePlaying = false; });
+}
+
+function pluckAnimation(idx) {
+  const g = ukeWrap.querySelector('.str-' + idx);
+  g.classList.remove('playing');
+  void g.getBoundingClientRect();   /* restart animation cleanly, no overlap */
+  g.classList.add('playing');
+  ukeWrap.classList.remove('pluck');
+  void ukeWrap.getBoundingClientRect();
+  ukeWrap.classList.add('pluck');
+  setTimeout(() => { g.classList.remove('playing'); }, 600);
+  setTimeout(() => { ukeWrap.classList.remove('pluck'); }, 500);
+}
+
+function selectString(idx, withTone) {
+  selected = idx;
+  const st = strings()[idx];
+  refreshUkeClasses(idx);
+  refreshChips(idx);
+  if (withTone) {
+    pluckAnimation(idx);
+    playTone(st.freq);
+  }
+  el('targetDisplay').textContent = 'Target: ' + st.note + ' (' + st.freq.toFixed(2) + ' Hz)';
+  if (tunedSet.has(idx)) {
+    setAdvice('good', 'The ' + st.note + ' string is in tune', '✓');
+  } else {
+    setAdvice('idle', 'Now tune the ' + st.note + ' string', '●');
+  }
+  announce('Now tune the ' + st.note + ' string', true);
+}
+
+document.querySelectorAll('.str-btn, .peg-btn').forEach(btn => {
+  btn.addEventListener('click', () => selectString(parseInt(btn.dataset.str, 10), true));
+});
+
+/* ---------- Microphone control ---------- */
+async function startTuner() {
+  el('micError').textContent = '';
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    el('micError').textContent = 'This browser does not support microphone input. You can still tap a string to hear its note and tune by ear.';
+    return;
+  }
+  try {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    micStream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: false, autoGainControl: false, noiseSuppression: false }
+    });
+    const source = audioCtx.createMediaStreamSource(micStream);
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 2048;
+    source.connect(analyser);
+
+    isRunning = true;
+    smoothedFreq = null;
+    lastValidAt = Date.now();
+    weakFrames = 0;
+    el('startBtn').disabled = true;
+    el('stopBtn').disabled = false;
+    el('statusLabel').textContent = 'Listening';
+    setAdvice('idle', 'Pluck one string', '●');
+    announce('Microphone on. Pluck one string.', true);
+    updatePitch();
+  } catch (err) {
+    let msg = 'Microphone is unavailable. You can still tap a string to hear its note and tune by ear.';
+    if (err && err.name === 'NotAllowedError') {
+      msg = 'Microphone permission was denied. Allow it in your browser address bar settings, or tune by ear with the reference tones.';
+    } else if (err && (err.name === 'NotFoundError' || err.name === 'OverconstrainedError')) {
+      msg = 'No microphone was found on this device. You can still tune by ear with the reference tones.';
+    }
+    el('micError').textContent = msg;
+    stopTuner();
+  }
+}
+
+function stopTuner() {
+  isRunning = false;
+  if (rafId) cancelAnimationFrame(rafId);
+  if (micStream) micStream.getTracks().forEach(t => t.stop());
+  if (audioCtx && audioCtx.state !== 'closed') audioCtx.close();
+  rafId = null;
+  micStream = null;
+  analyser = null;
+  audioCtx = null;
+  smoothedFreq = null;
+  el('startBtn').disabled = false;
+  el('stopBtn').disabled = true;
+  el('statusLight').className = 'status-light';
+  el('statusLabel').textContent = 'Not listening';
+  card.classList.remove('in-tune');
+  setAdvice('idle', 'Press Start tuning to use the microphone', '');
+  announce('Microphone off.');
+}
+
+el('startBtn').addEventListener('click', startTuner);
+el('stopBtn').addEventListener('click', stopTuner);
+window.addEventListener('pagehide', () => { if (isRunning) stopTuner(); });
+window.addEventListener('beforeunload', () => { if (isRunning) stopTuner(); });
+
+el('resetBtn').addEventListener('click', () => {
+  tunedSet = new Set();
+  selected = null;
+  clearTimeout(advanceTimer);
+  ukeWrap.classList.remove('celebrate');
+  refreshUkeClasses(null);
+  refreshChips(null);
+  card.classList.remove('in-tune');
+  el('statusLight').className = 'status-light';
+  el('noteDisplay').textContent = '--';
+  el('targetDisplay').textContent = 'Target: --';
+  el('freqDisplay').textContent = '0.0 Hz';
+  el('centsDisplay').textContent = '0 cents from target';
+  el('pointer').style.left = '50%';
+  el('pointer').style.background = 'var(--muted)';
+  setAdvice('idle', isRunning ? 'Pluck one string' : 'Press Start tuning to use the microphone', '');
+  announce('Check marks cleared');
+});
+
+/* ---------- Pitch detection ---------- */
+function updatePitch() {
+  if (!isRunning || !analyser || !audioCtx) return;
+  const buffer = new Float32Array(analyser.fftSize);
+  analyser.getFloatTimeDomainData(buffer);
+
+  let rms = 0;
+  for (let i = 0; i < buffer.length; i++) rms += buffer[i] * buffer[i];
+  rms = Math.sqrt(rms / buffer.length);
+
+  if (tonePlaying) {
+    rafId = requestAnimationFrame(updatePitch);   /* paused while a reference tone plays */
+    return;
+  }
+
+  const rawFreq = autoCorrelate(buffer, audioCtx.sampleRate);
+  if (rawFreq !== -1 && rawFreq >= MIN_FREQ && rawFreq <= MAX_FREQ) {
+    smoothedFreq = smoothedFreq ? (smoothedFreq * 0.7 + rawFreq * 0.3) : rawFreq;
+    lastValidAt = Date.now();
+    weakFrames = 0;
+    renderTunerState(smoothedFreq);
+  } else {
+    if (rms < 0.004) weakFrames++; else weakFrames = 0;
+    const quietFor = Date.now() - lastValidAt;
+    if (quietFor > 6000 && weakFrames > 90) {
+      setAdvice('idle', 'Move closer and pluck one string clearly', '●');
+      announce('Sound is weak. Move closer and pluck one string clearly.');
+    } else if (quietFor > 9000) {
+      setAdvice('idle', 'It is noisy or unclear - pluck one string at a time', '●');
+      announce('Sound is noisy or unclear. Pluck one string at a time.');
+    }
+  }
+  rafId = requestAnimationFrame(updatePitch);
+}
+
+function renderTunerState(freq) {
+  const s = strings();
+
+  /* Target: the selected string if one is chosen, otherwise the closest string */
+  let targetIdx;
+  if (selected !== null) {
+    targetIdx = selected;
+  } else {
+    let minCents = Infinity;
+    targetIdx = 0;
+    for (let i = 0; i < s.length; i++) {
+      const cd = Math.abs(1200 * Math.log2(freq / s[i].freq));
+      if (cd < minCents) { minCents = cd; targetIdx = i; }
+    }
+  }
+  const target = s[targetIdx];
+  const cents = 1200 * Math.log2(freq / target.freq);
+  const isTuned = Math.abs(cents) <= IN_TUNE_CENTS;
+
+  el('noteDisplay').textContent = freqToNoteName(freq);
+  el('targetDisplay').textContent = 'Target: ' + target.note + ' (' + target.freq.toFixed(2) + ' Hz)';
+  el('freqDisplay').textContent = freq.toFixed(1) + ' Hz';
+  el('centsDisplay').textContent = (cents >= 0 ? '+' : '') + Math.round(cents) + ' cents from target';
+
+  refreshUkeClasses(targetIdx);
+  refreshChips(targetIdx);
+
+  const clampedCents = Math.max(-50, Math.min(50, cents));
+  const pointer = el('pointer');
+  pointer.style.left = (50 + clampedCents) + '%';
+
+  const light = el('statusLight');
+
+  if (isTuned) {
+    light.className = 'status-light green';
+    el('statusLabel').textContent = 'In tune';
+    card.classList.add('in-tune');
+    pointer.style.background = 'var(--green)';
+    setAdvice('good', 'In tune', '✓');
+    setPegDirection(targetIdx, null);
+    announce('In tune: ' + target.note);
+    if (!tunedSet.has(targetIdx)) {
+      tunedSet.add(targetIdx);
+      refreshUkeClasses(targetIdx);
+      refreshChips(targetIdx);
+      if (tunedSet.size === 4) {
+        ukeWrap.classList.add('celebrate');
+        setAdvice('good', 'All four strings are in tune. Nicely done!', '✓');
+        announce('All four strings are in tune. Well done!', true);
+        setTimeout(() => ukeWrap.classList.remove('celebrate'), 1000);
+      } else if (selected !== null) {
+        /* manual mode: move on to the next untuned string */
+        clearTimeout(advanceTimer);
+        advanceTimer = setTimeout(() => {
+          for (let i = 0; i < 4; i++) {
+            if (!tunedSet.has(i)) { selectString(i, true); break; }
+          }
+        }, 900);
+      }
+    }
+  } else if (cents < 0) {
+    light.className = 'status-light amber';
+    el('statusLabel').textContent = 'Flat - tighten';
+    card.classList.remove('in-tune');
+    pointer.style.background = '#f0a12e';
+    setAdvice('flat', 'Tighten slowly', '▲');
+    setPegDirection(targetIdx, 'flat');
+    announce(target.note + ' is flat. Tighten slowly.');
+  } else {
+    light.className = 'status-light amber';
+    el('statusLabel').textContent = 'Sharp - loosen';
+    card.classList.remove('in-tune');
+    pointer.style.background = '#f0a12e';
+    setAdvice('sharp', 'Loosen slowly', '▼');
+    setPegDirection(targetIdx, 'sharp');
+    announce(target.note + ' is sharp. Loosen slowly.');
+  }
+}
+
+/* Autocorrelation pitch detection - the same working algorithm as V1 */
+function autoCorrelate(buf, sampleRate) {
+  let size = buf.length;
+  let rms = 0;
+  for (let i = 0; i < size; i++) rms += buf[i] * buf[i];
+  rms = Math.sqrt(rms / size);
+  if (rms < 0.015) return -1;
+
+  let r1 = 0, r2 = size - 1, thres = 0.2;
+  for (let i = 0; i < size / 2; i++) {
+    if (Math.abs(buf[i]) < thres) { r1 = i; break; }
+  }
+  for (let i = 1; i < size / 2; i++) {
+    if (Math.abs(buf[size - i]) < thres) { r2 = size - i; break; }
+  }
+  buf = buf.slice(r1, r2);
+  size = buf.length;
+  if (size < 2) return -1;
+
+  const c = new Array(size).fill(0);
+  for (let i = 0; i < size; i++) {
+    for (let j = 0; j < size - i; j++) {
+      c[i] += buf[j] * buf[j + i];
+    }
+  }
+
+  let d = 0;
+  while (d + 1 < size && c[d] > c[d + 1]) d++;
+  let maxval = -1, maxpos = -1;
+  for (let i = d; i < size; i++) {
+    if (c[i] > maxval) { maxval = c[i]; maxpos = i; }
+  }
+  if (maxpos <= 0) return -1;
+
+  let period = maxpos;
+  if (maxpos > 0 && maxpos < size - 1) {
+    const x1 = c[maxpos - 1];
+    const x2 = c[maxpos];
+    const x3 = c[maxpos + 1];
+    const denominator = 2 * (2 * x2 - x1 - x3);
+    if (denominator !== 0) period += (x3 - x1) / denominator;
+  }
+  return sampleRate / period;
+}
+
+/* ---------- Init ---------- */
+applyTuning('standard');
+if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia ||
+    !(window.AudioContext || window.webkitAudioContext)) {
+  el('startBtn').disabled = true;
+  el('micError').textContent = 'This browser does not support microphone tuning. Tap a string to hear its note and tune by ear.';
+}
+</script>
+</body>
+</html>
