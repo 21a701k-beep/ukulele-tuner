@@ -119,7 +119,7 @@
 
   .uke-section { width: 100%; display: flex; flex-direction: column; align-items: center; }
   .uke-caption { font-size: 0.8rem; color: var(--muted); margin: 0.15rem 0 0.5rem; text-align: center; }
-  .uke-wrap { position: relative; width: min(280px, 74vw, 34vh); }
+  .uke-wrap { position: relative; width: min(280px, 74vw); }
   .uke-wrap svg { display: block; width: 100%; height: auto; }
 
   .hit-btn {
@@ -322,10 +322,10 @@
       <button type="button" class="hit-btn str-btn" data-str="1" style="left:39.2%;top:17.9%;width:10.9%;height:64.3%" aria-label="String 2, C string. Hear its reference tone."></button>
       <button type="button" class="hit-btn str-btn" data-str="2" style="left:50%;top:17.9%;width:10.9%;height:64.3%" aria-label="String 3, E string. Hear its reference tone."></button>
       <button type="button" class="hit-btn str-btn" data-str="3" style="left:61.3%;top:17.9%;width:10.9%;height:64.3%" aria-label="String 4, A string. Hear its reference tone."></button>
-      <button type="button" class="hit-btn peg-btn" data-str="0" style="left:9.2%;top:2.1%;width:25%;height:10.7%" aria-label="Tuning peg for string 1"><span class="dir" aria-hidden="true"></span></button>
-      <button type="button" class="hit-btn peg-btn" data-str="1" style="left:9.2%;top:8.6%;width:25%;height:10.7%" aria-label="Tuning peg for string 2"><span class="dir" aria-hidden="true"></span></button>
-      <button type="button" class="hit-btn peg-btn" data-str="2" style="left:65.8%;top:2.1%;width:25%;height:10.7%" aria-label="Tuning peg for string 3"><span class="dir" aria-hidden="true"></span></button>
-      <button type="button" class="hit-btn peg-btn" data-str="3" style="left:65.8%;top:8.6%;width:25%;height:10.7%" aria-label="Tuning peg for string 4"><span class="dir" aria-hidden="true"></span></button>
+      <button type="button" class="hit-btn peg-btn" data-str="0" style="left:9.2%;top:2.1%;width:25%;height:8.4%" aria-label="Tuning peg for string 1"><span class="dir" aria-hidden="true"></span></button>
+      <button type="button" class="hit-btn peg-btn" data-str="1" style="left:9.2%;top:10.5%;width:25%;height:8.4%" aria-label="Tuning peg for string 2"><span class="dir" aria-hidden="true"></span></button>
+      <button type="button" class="hit-btn peg-btn" data-str="2" style="left:65.8%;top:2.1%;width:25%;height:8.4%" aria-label="Tuning peg for string 3"><span class="dir" aria-hidden="true"></span></button>
+      <button type="button" class="hit-btn peg-btn" data-str="3" style="left:65.8%;top:10.5%;width:25%;height:8.4%" aria-label="Tuning peg for string 4"><span class="dir" aria-hidden="true"></span></button>
     </div>
     <p class="uke-caption">Tap a string or peg to hear its note. A ring of arrows shows which way to turn the peg.</p>
   </section>
@@ -428,7 +428,15 @@ function refreshUkeClasses(activeIdx) {
   ukeWrap.className = 'uke-wrap ' + cls.join(' ');
 }
 
+let lastChipKey = '';
+function clearPegDirections() {
+  document.querySelectorAll('.peg-btn .dir').forEach(sp => { sp.textContent = ''; sp.className = 'dir'; });
+}
+
 function refreshChips(activeIdx) {
+  const key = activeIdx + '|' + [...tunedSet].sort().join(',');
+  if (key === lastChipKey) return;
+  lastChipKey = key;
   const s = strings();
   chipsEl.innerHTML = '';
   s.forEach((st, i) => {
@@ -438,7 +446,6 @@ function refreshChips(activeIdx) {
       '<span>' + st.freq.toFixed(st.freq < 200 ? 1 : 0) + ' Hz</span>';
     chipsEl.appendChild(d);
   });
-  document.querySelectorAll('.peg-btn .dir').forEach(sp => { sp.textContent = ''; sp.className = 'dir'; });
 }
 
 function setPegDirection(idx, dir) {
@@ -454,6 +461,7 @@ function applyTuning(key) {
   currentTuning = key;
   selected = null;
   tunedSet = new Set();
+  lastChipKey = '';
   clearTimeout(advanceTimer);
   TUNING_KEYS.forEach(k => el('tun-' + k).setAttribute('aria-pressed', String(k === key)));
   strings().forEach((st, i) => { el('plbl-' + i).textContent = st.note; });
@@ -477,6 +485,7 @@ function applyTuning(key) {
   setAdvice('idle', isRunning ? 'Pluck one string' : 'Press Start tuning to use the microphone', '');
   refreshUkeClasses(null);
   refreshChips(null);
+  clearPegDirections();
   smoothedFreq = null;
   announce(TUNINGS[key].label + ' tuning selected');
 }
@@ -678,6 +687,7 @@ function renderTunerState(freq) {
 
   refreshUkeClasses(targetIdx);
   refreshChips(targetIdx);
+  clearPegDirections();
 
   const clampedCents = Math.max(-50, Math.min(50, cents));
   const pointer = el('pointer');
